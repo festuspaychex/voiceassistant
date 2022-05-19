@@ -1,7 +1,6 @@
 package com.efeyopixel.voiceassistant.controller;
 
 import com.efeyopixel.voiceassistant.entity.Client;
-import com.efeyopixel.voiceassistant.entity.Employee;
 import com.efeyopixel.voiceassistant.entity.Payperiod;
 import com.efeyopixel.voiceassistant.repository.ClientRepository;
 import com.efeyopixel.voiceassistant.repository.EmployeeRepository;
@@ -19,10 +18,9 @@ import org.springframework.web.bind.annotation.*;
 
 import javax.annotation.PostConstruct;
 import javax.transaction.Transactional;
-import java.net.URI;
 import java.net.URISyntaxException;
-import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 
 @RestController
@@ -48,7 +46,7 @@ public class VoiceAssistantControllerV2 {
     }
 
     @PostMapping(value = "/client", produces = MediaType.APPLICATION_JSON_VALUE)
-    public ResponseEntity<?> getClientNumber(@RequestBody Object requestBody) {
+    public ResponseEntity<?> processDialogFlowRequest(@RequestBody Object requestBody) {
 
         log.info(requestBody.toString());
         GoogleCloudDialogflowCxV3WebhookRequest request = objectMapper.convertValue(requestBody, GoogleCloudDialogflowCxV3WebhookRequest.class);
@@ -67,7 +65,7 @@ public class VoiceAssistantControllerV2 {
 
     }
 
-    @PostMapping(value = "/dialogFlowWebHook", produces = MediaType.APPLICATION_JSON_VALUE)
+//    @PostMapping(value = "/dialogFlowWebHook", produces = MediaType.APPLICATION_JSON_VALUE)
     public ResponseEntity<?> getClientDetails(@RequestBody Object requestBody) {
         log.info(requestBody.toString());
 
@@ -93,6 +91,39 @@ public class VoiceAssistantControllerV2 {
             if (action.textValue().equalsIgnoreCase("input.welcome")) {
                 return queryResult.get("fulfillmentText").textValue();
             }
+
+            if (action.textValue().equalsIgnoreCase("ConfirmClient")) {
+                log.info("ConfirmClient logic.");
+                JsonNode parameters = queryResult.get("parameters");
+                JsonNode payx_client = parameters.get("payx_client");
+                Optional<Client> clientById = clientRepository.findById(payx_client.textValue());
+                if (clientById.isPresent()) {
+                    return "I've fetched the client information for company " + clientById.get().getCompanyName() + ". Would you like to proceed?";
+                } else {
+                    return "Sorry company with "+ payx_client + " not found. Please try again or call 833-299-0168 for assistance!";
+                }
+            }
+            if (action.textValue().equalsIgnoreCase("PayrollReport")) {
+                return "I have a total number of 5 transactions with $400  regular hours,\n" +
+                        "560 vacation hours and 21 overtime hours.\n" +
+                        "That amounts to 5 live check(s) and 0 direct deposit(s). Shall I process this payroll?";
+            }
+
+            if (action.textValue().equalsIgnoreCase("PayPeriodVerification")) {
+                log.info("payperiodverification logic");
+                Payperiod payperiod = payperiodRepository.findAll().get(0);
+                if (payperiod != null) {
+                    return "Let’s verify your pay period, pay period begins " + payperiod.getStartDate() + " and ends " + payperiod.getEndDate() + ", for the " + payperiod.getCheckDate() + " check date, is that correct?";
+                } else {
+                    return "Apologies, I can only process your payroll for the next pay period with check date of today . Would you still like to proceed?";
+                }
+            }
+
+            if (action.textValue().equalsIgnoreCase("PayrollSubmitted")) {
+                log.info("PayrollSubmitted logic.");
+                return "Okay, your payroll has been processed. Please login to Paychex Flex after 30 minutes to view your reports. Would you like to process your payroll for another client as well?";
+            }
+
             if (intentName.textValue().equals("Yes Process Payroll Intent")) {
                 JsonNode parameters = queryResult.get("parameters");
                 if (parameters != null) {
