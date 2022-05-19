@@ -14,11 +14,11 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-@RestController
-@RequestMapping("/api")
+//@RestController
+//@RequestMapping("/api")
 @AllArgsConstructor
 @Slf4j
-public class VoiceAssistantController {
+public class VoiceAssistantControllerv1 {
 
     private final ObjectMapper objectMapper;
 
@@ -46,11 +46,19 @@ public class VoiceAssistantController {
 
         JsonNode queryResult = request.get("queryResult");
         JsonNode action = queryResult.get("action");
-        if (action.textValue().equalsIgnoreCase("input.welcome")) {
-            return queryResult.get("fulfillmentText").textValue();
-        } else {
-            return "Sorry, I didn't get that, please repeat.";
+
+        String resultReturned;
+        String actionText = action.textValue().toUpperCase();
+        switch (actionText) {
+
+            case "INPUT.WELCOME":
+            case "DEFAULTWELCOMEINTENT.DEFAULTWELCOMEINTENT-YES":
+                resultReturned = queryResult.get("fulfillmentText").textValue();
+                break;
+            default:
+               resultReturned = "Sorry, unknown action - " + action.textValue() + " - is not handled yet..";
         }
+        return resultReturned;
 
     }
 }
