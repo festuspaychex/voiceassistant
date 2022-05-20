@@ -115,6 +115,7 @@ public class VoiceAssistantControllerV2 {
                     double overtimeHours = 0.0;
                     double regularHours = 0.0;
 
+                    StringBuffer deliveryTime = new StringBuffer("The direct deposits will be deposited on the check date.");
                     int checkCount = 0;
                     int depositCount = 0;
 
@@ -139,11 +140,13 @@ public class VoiceAssistantControllerV2 {
                     }
                     if (checkCount > 0) {
                         check = true;
+                        deliveryTime.append(getEstimatedDeliveryTimes());
                     }
 
                     return "I have a total number of " + employees.size() + " transactions with a total pay of " + pay + " and " + regularHours + " regular hours,\n" +
                             +vacationHours + " vacation hours and " + overtimeHours + " overtime hours.\n" +
-                            "That amounts to " + checkCount + " live check(s) and " + depositCount + " direct deposit(s). Shall I process this payroll?";
+                            "That amounts to " + checkCount + " live check(s) and " + depositCount + " direct deposit(s).\n" +
+                            deliveryTime+ " Shall I process this payroll?";
                 }
                 else {
                     return "It looks like your client has no employees. Please call 833-299-0168 for assistance to add new employees.";
@@ -159,8 +162,8 @@ public class VoiceAssistantControllerV2 {
             //Getting the contact person and client number from user
             JsonNode parameters = queryResult.get("parameters");
             JsonNode payx_client = parameters.get("payx_client");
-
-
+            //todo name is not used
+            String name = parameters.get("person").get("name").textValue();
             //Get client details from DB
             Optional<Client> clientById = clientRepository.findById(payx_client.textValue());
 
@@ -217,9 +220,9 @@ public class VoiceAssistantControllerV2 {
 
     private void sendEmail(String recipientEmail) throws Exception {
 
-        String emailPassword = "";//todo add values here
+        String emailPassword = "bismil311";//todo add values here
 
-        String emailUsername = "";//todo add values here
+        String emailUsername = "nsyed@paychex.com";//todo add values here
 
         Properties prop = new Properties();
 
