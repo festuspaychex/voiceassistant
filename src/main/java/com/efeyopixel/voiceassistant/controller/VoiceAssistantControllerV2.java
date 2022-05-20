@@ -160,7 +160,7 @@ public class VoiceAssistantControllerV2 {
             JsonNode parameters = queryResult.get("parameters");
             JsonNode payx_client = parameters.get("payx_client");
 
-            String name = parameters.get("person").get("name").textValue();
+
             //Get client details from DB
             Optional<Client> clientById = clientRepository.findById(payx_client.textValue());
 
