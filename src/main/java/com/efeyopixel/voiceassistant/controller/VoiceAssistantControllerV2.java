@@ -7,6 +7,7 @@ import com.efeyopixel.voiceassistant.entity.Payperiod;
 import com.efeyopixel.voiceassistant.repository.ClientRepository;
 import com.efeyopixel.voiceassistant.repository.EmployeeRepository;
 import com.efeyopixel.voiceassistant.repository.PayperiodRepository;
+import com.efeyopixel.voiceassistant.service.UtilService;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -218,11 +219,11 @@ public class VoiceAssistantControllerV2 {
         return ResponseEntity.ok(save);
     }
 
+    private final UtilService utilService;
     private void sendEmail(String recipientEmail) throws Exception {
 
-        String emailPassword = "bismil311";//todo add values here
-
-        String emailUsername = "nsyed@paychex.com";//todo add values here
+        String emailUsername = utilService.getEmailUsername();
+        String emailPassword = utilService.getEmailPassword();
 
         Properties prop = new Properties();
 
