@@ -1,6 +1,8 @@
 package com.efeyopixel.voiceassistant.controller;
 
 import com.efeyopixel.voiceassistant.entity.Client;
+import com.efeyopixel.voiceassistant.entity.Employee;
+import com.efeyopixel.voiceassistant.entity.PayType;
 import com.efeyopixel.voiceassistant.entity.Payperiod;
 import com.efeyopixel.voiceassistant.repository.ClientRepository;
 import com.efeyopixel.voiceassistant.repository.EmployeeRepository;
@@ -16,12 +18,14 @@ import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
-import javax.annotation.PostConstruct;
+import javax.mail.*;
+import javax.mail.internet.InternetAddress;
+import javax.mail.internet.MimeBodyPart;
+import javax.mail.internet.MimeMessage;
+import javax.mail.internet.MimeMultipart;
 import javax.transaction.Transactional;
 import java.net.URISyntaxException;
-import java.util.Map;
-import java.util.Optional;
-import java.util.concurrent.ConcurrentHashMap;
+import java.util.*;
 
 @RestController
 @RequestMapping("/api")
@@ -34,16 +38,6 @@ public class VoiceAssistantControllerV2 {
     private final EmployeeRepository employeeRepository;
     private final PayperiodRepository payperiodRepository;
 
-    Map<String, Object> database = new ConcurrentHashMap<>();
-
-    @PostConstruct
-    public void initializeDB() {
-        database.put("12345678", "CompanyB");
-        database.put("12345676", "Company6");
-        database.put("12345675", "Company5");
-        database.put("12345674", "Company4");
-        log.info("db size {}",database.isEmpty());
-    }
 
     @PostMapping(value = "/client", produces = MediaType.APPLICATION_JSON_VALUE)
     public ResponseEntity<?> processDialogFlowRequest(@RequestBody Object requestBody) {
@@ -61,89 +55,151 @@ public class VoiceAssistantControllerV2 {
 
         GoogleCloudDialogflowV2WebhookResponse response = new GoogleCloudDialogflowV2WebhookResponse();
         response.setFulfillmentText(processRequest(actualObj));
-        return ResponseEntity.ok(response);
 
-    }
-
-//    @PostMapping(value = "/dialogFlowWebHook", produces = MediaType.APPLICATION_JSON_VALUE)
-    public ResponseEntity<?> getClientDetails(@RequestBody Object requestBody) {
-        log.info(requestBody.toString());
-
-        GoogleCloudDialogflowCxV3WebhookRequest request = objectMapper.convertValue(requestBody, GoogleCloudDialogflowCxV3WebhookRequest.class);
-        JsonNode actualObj = null;
-        try {
-            String jsonInString = objectMapper.writerWithDefaultPrettyPrinter().writeValueAsString(request);
-            actualObj = objectMapper.readTree(jsonInString);
-        } catch (JsonProcessingException e) {
-            log.error(e.getMessage(), e);
-        }
-        GoogleCloudDialogflowV2WebhookResponse response = new GoogleCloudDialogflowV2WebhookResponse();
-        response.setFulfillmentText(processRequest(actualObj));
         return ResponseEntity.ok(response);
     }
+
     private String processRequest(JsonNode request) {
         log.info(request.toString());
-        try {
-            JsonNode queryResult = request.get("queryResult");
-            JsonNode action = queryResult.get("action");
-            JsonNode intent = queryResult.get("intent");
-            JsonNode intentName = intent.get("displayName");
-            if (action.textValue().equalsIgnoreCase("input.welcome")) {
-                return queryResult.get("fulfillmentText").textValue();
-            }
 
-            if (action.textValue().equalsIgnoreCase("ConfirmClient")) {
-                log.info("ConfirmClient logic.");
+        JsonNode queryResult = request.get("queryResult");
+        JsonNode action = queryResult.get("action");
+        JsonNode intent = queryResult.get("intent");
+        JsonNode intentName = intent.get("displayName");
+        if (action.textValue().equalsIgnoreCase("input.welcome")) {
+            return queryResult.get("fulfillmentText").textValue();
+        }
+
+        if (action.textValue().equalsIgnoreCase("ConfirmClient")) {
+            log.info("ConfirmClient logic.");
+
+            //Getting the contact person and client number from user
+            JsonNode parameters = queryResult.get("parameters");
+            JsonNode payx_client = parameters.get("payx_client");
+
+            String name = parameters.get("person").get("name").textValue();
+            //Get client details from DB
+            Optional<Client> clientById = clientRepository.findById(payx_client.textValue());
+            String contactPerson = clientById.get().getContactPerson().toLowerCase();
+
+            //If user is contact person listed and client number is present, take action
+            if (clientById.isPresent() && !contactPerson.isEmpty() && contactPerson.contains(name.toLowerCase())) {
+
+                return "Great! I've fetched the required information for " + clientById.get().getCompanyName() + ". Would you like to make any changes for " + clientById.get().getCompanyName() + ", like adding new employees, modifying employee info or the pay rate, or terminating employees?";
+            } else {
+
+                return "Sorry, it looks like I don't have the information for client " + payx_client + " or you are not the authorized contact. Please call 833-299-0168 for assistance!";
+            }
+        }
+
+        if (action.textValue().equalsIgnoreCase("PayrollReport")) {
+
+            log.info("payroll report logic");
+
+            try {
+                //Getting the contact person and client number from user
                 JsonNode parameters = queryResult.get("parameters");
                 JsonNode payx_client = parameters.get("payx_client");
+
+                String name = parameters.get("person").get("name").textValue();
+                //Get client details from DB
                 Optional<Client> clientById = clientRepository.findById(payx_client.textValue());
-                if (clientById.isPresent()) {
-                    return "I've fetched the client information for company " + clientById.get().getCompanyName() + ". Would you like to proceed?";
-                } else {
-                    return "Sorry company with "+ payx_client + " not found. Please try again or call 833-299-0168 for assistance!";
+
+                List<Employee> employees = clientById.get().getEmployees();
+
+                if (!employees.isEmpty()) {
+
+                    boolean check = false;
+                    double pay = 0.0;
+                    double vacationHours = 0.0;
+                    double overtimeHours = 0.0;
+                    double regularHours = 0.0;
+
+                    int checkCount = 0;
+                    int depositCount = 0;
+
+                    for (Employee emp : employees) {
+                        vacationHours += emp.getVacationHours();
+                        overtimeHours += emp.getOvertimeHours();
+                        if (emp.getPayType().equals(PayType.SALARIED)) {
+                            regularHours += 40.0;
+                            pay += emp.getPay();
+                        } else {
+                            double empRegHours = 40.0 - emp.getVacationHours();
+                            regularHours += regularHours + empRegHours;
+                            double empPay = (empRegHours * emp.getPay()) + (emp.getPay() * 1.5 * emp.getOvertimeHours());
+                            pay += empPay;
+                        }
+
+                        if (emp.getModeOfPay().contains("DEPOSIT")) {
+                            depositCount++;
+                        } else {
+                            checkCount++;
+                        }
+                    }
+                    if (checkCount > 0) {
+                        check = true;
+                    }
+
+                    return "I have a total number of " + employees.size() + " transactions with a total pay of " + pay + " and " + regularHours + " regular hours,\n" +
+                            +vacationHours + " vacation hours and " + overtimeHours + " overtime hours.\n" +
+                            "That amounts to " + checkCount + " live check(s) and " + depositCount + " direct deposit(s). Shall I process this payroll?";
                 }
-            }
-            if (action.textValue().equalsIgnoreCase("PayrollReport")) {
-                return "I have a total number of 5 transactions with $400  regular hours,\n" +
-                        "560 vacation hours and 21 overtime hours.\n" +
-                        "That amounts to 5 live check(s) and 0 direct deposit(s). Shall I process this payroll?";
-            }
-
-            if (action.textValue().equalsIgnoreCase("PayPeriodVerification")) {
-                log.info("payperiodverification logic");
-                Payperiod payperiod = payperiodRepository.findAll().get(0);
-                if (payperiod != null) {
-                    return "Let’s verify your pay period, pay period begins " + payperiod.getStartDate() + " and ends " + payperiod.getEndDate() + ", for the " + payperiod.getCheckDate() + " check date, is that correct?";
-                } else {
-                    return "Apologies, I can only process your payroll for the next pay period with check date of today . Would you still like to proceed?";
+                else {
+                    return "It looks like your client has no employees. Please call 833-299-0168 for assistance to add new employees.";
                 }
-            }
 
-            if (action.textValue().equalsIgnoreCase("PayrollSubmitted")) {
-                log.info("PayrollSubmitted logic.");
-                return "Okay, your payroll has been processed. Please login to Paychex Flex after 30 minutes to view your reports. Would you like to process your payroll for another client as well?";
+            } catch (Exception e) {
+                log.error(e.getMessage(), e);
             }
-
-            if (intentName.textValue().equals("Yes Process Payroll Intent")) {
-                JsonNode parameters = queryResult.get("parameters");
-                if (parameters != null) {
-                    JsonNode payx_client = parameters.get("payx_client");
-                    Object clientName = database.get(payx_client.textValue());
-                    return clientName.toString();
-                } else
-                    return "Can I confirm your client is Donuts To Go?";
-            } else {
-                return "Sorry, I didn't get that, please repeat.";
-            }
-        } catch (Exception ex) {
-            log.error(ex.getMessage(), ex);
-            return ex.getMessage();
         }
+
+        if (action.textValue().equalsIgnoreCase("PayPeriodVerification")) {
+            log.info("payperiodverification logic");
+            //Getting the contact person and client number from user
+            JsonNode parameters = queryResult.get("parameters");
+            JsonNode payx_client = parameters.get("payx_client");
+
+            String name = parameters.get("person").get("name").textValue();
+            //Get client details from DB
+            Optional<Client> clientById = clientRepository.findById(payx_client.textValue());
+
+            Payperiod payperiod = clientById.get().getPayperiods().get(0);
+            if (payperiod != null) {
+                return "Let’s verify your pay period, pay period begins " + payperiod.getStartDate() + " and ends " + payperiod.getEndDate() + ", for the " + payperiod.getCheckDate() + " check date, is that correct?";
+
+            } else {
+                return "Apologies, I can only process your payroll for the next pay period with check date of today. Would you still like to proceed?";
+            }
+
+        }
+
+        if (action.textValue().equalsIgnoreCase("PayrollSubmitted")) {
+
+            log.info("PayrollSubmitted logic.");
+
+            //Getting the contact person and client number from user
+            JsonNode parameters = queryResult.get("parameters");
+            JsonNode payx_client = parameters.get("payx_client");
+
+            //Get client details from DB
+            Optional<Client> clientById = clientRepository.findById(payx_client.textValue());
+            try {
+                sendEmail(clientById.get().getContactEmail());
+            } catch (Exception e) {
+                log.error(e.getMessage(), e);
+            }
+            getEstimatedDeliveryTimes();
+
+            return "Okay, your payroll has been processed. Please login to Paychex Flex after 30 minutes to view your reports. Would you like to process your payroll for another client as well?";
+        }
+        return "Sorry, I didn't get that, please repeat.";
+
     }
 
     @Transactional
     @PostMapping(value = "/add-client", produces = MediaType.APPLICATION_JSON_VALUE)
-    public ResponseEntity<?> addClient(@RequestBody Client client) throws URISyntaxException {
+    public ResponseEntity<?> addClient(@RequestBody Client client) {
         log.info("adding client {}", client);
 
         Client save = clientRepository.save(client);
@@ -159,17 +215,74 @@ public class VoiceAssistantControllerV2 {
         return ResponseEntity.ok(save);
     }
 
-//    @PostMapping(value = "/add-employee", produces = MediaType.APPLICATION_JSON_VALUE)
-//    public ResponseEntity<?> addWorkers(@RequestBody List<Employee> employees) throws URISyntaxException {
-//        List<Employee> s = employeeRepository.saveAll(employees);
-//        return ResponseEntity.ok("successfully added " + s.size() + " employees!");
-//    }
-//
-//    @PostMapping(value = "/add-payperiods", produces = MediaType.APPLICATION_JSON_VALUE)
-//    public ResponseEntity<?> addPayroll(@RequestBody List<Payperiod> payperiods) throws URISyntaxException {
-//        List<Payperiod> s = payperiodRepository.saveAll(payperiods);
-//        return ResponseEntity.ok("successfully added " + s.size() + " payperiods!");
-//    }
+    private void sendEmail(String recipientEmail) throws Exception {
+
+        String emailPassword = "";//todo add values here
+
+        String emailUsername = "";//todo add values here
+
+        Properties prop = new Properties();
+
+        prop.put("mail.smtp.auth", true);
+
+        prop.put("mail.smtp.starttls.enable", "true");
+
+        prop.put("mail.smtp.host", "smtp.mailtrap.io");
+        prop.put("mail.smtp.port", "25");
+
+        prop.put("mail.smtp.ssl.trust", "smtp.mailtrap.io");
+        Session session = Session.getInstance(prop, new Authenticator() {
+            @Override
+            protected PasswordAuthentication getPasswordAuthentication() {
+                return new PasswordAuthentication(emailUsername, emailPassword);
+            }
+        });
+
+        Message message = new MimeMessage(session);
+        message.setFrom(new InternetAddress(emailUsername));
+        message.setRecipients(
+        Message.RecipientType.TO, InternetAddress.parse(emailUsername));
+        message.setSubject("Thank you for choosing Paychex!");
+        String msg = "<h3> We hope our virtual assistant was helpful! Please take a survey to rate your experience at www.survey.com/paychex</h3>\n" +
+                "<h5> Please do not reply to this email. This mailbox is not monitored</h5>";
+        MimeBodyPart mimeBodyPart = new MimeBodyPart();
+        mimeBodyPart.setContent(msg, "text/html; charset=utf-8");
+
+        Multipart multipart = new MimeMultipart();
+
+        multipart.addBodyPart(mimeBodyPart);
+
+        message.setContent(multipart);
+
+        Transport.send(message);
+
+    }
+
+    private String getEstimatedDeliveryTimes() {
+        Random rand = new Random();
+
+        Map<String, String> doubleBraceMap  = new HashMap<String, String>() {{
+            put("USPS", "3 to 5 business days"); //First-Class Mail®
+            put("FedEx", "1 to 7 business days"); //FedEx Ground®
+            put("UPS", "1 to 5 business days"); //UPS Ground®
+            put("DHL eCommerce", "3-8 average postal days"); //DHL SmartMail Flats®
+
+        }};
+
+        List<String> givenList = Arrays.asList("one", "two", "three", "four");
+
+        int numberOfElements = 2;
+
+        for (int i = 0; i < numberOfElements; i++) {
+
+            int randomIndex = rand.nextInt(givenList.size());
+
+            String randomElement = givenList.get(randomIndex);
+        }
+        //todo review what needs to be returned here
+        return givenList.get(0);
+
+    }
 
     @GetMapping("/clients")
     public ResponseEntity<?> getClients() {
