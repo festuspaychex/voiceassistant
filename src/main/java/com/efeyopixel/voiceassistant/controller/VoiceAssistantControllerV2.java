@@ -259,28 +259,21 @@ public class VoiceAssistantControllerV2 {
     }
 
     private String getEstimatedDeliveryTimes() {
-        Random rand = new Random();
-
-        Map<String, String> doubleBraceMap  = new HashMap<String, String>() {{
-            put("USPS", "3 to 5 business days"); //First-Class Mail®
-            put("FedEx", "1 to 7 business days"); //FedEx Ground®
-            put("UPS", "1 to 5 business days"); //UPS Ground®
-            put("DHL eCommerce", "3-8 average postal days"); //DHL SmartMail Flats®
-
+        Map<String, String[]> postalMap  = new HashMap<String, String[]>() {{
+            put("USPS", new String[]{"First-Class Mail", "3 to 5 business days."});
+            put("FedEx", new String[]{"FedEx Ground", "1 to 7 business days."});
+            put("UPS", new String[]{"UPS Ground", "1 to 5 business days."});
+            put("DHL eCommerce", new String[]{"DHL SmartMail Flats", "3-8 average postal days."});
         }};
 
-        List<String> givenList = Arrays.asList("one", "two", "three", "four");
+        List<String> keysAsArray = new ArrayList<String>(postalMap.keySet());
+        Random r = new Random();
 
-        int numberOfElements = 2;
+        String carrier = keysAsArray.get(r.nextInt(keysAsArray.size()));
+        String service = postalMap.get(carrier)[0];
+        String deliveryTime = postalMap.get(carrier)[1];
 
-        for (int i = 0; i < numberOfElements; i++) {
-
-            int randomIndex = rand.nextInt(givenList.size());
-
-            String randomElement = givenList.get(randomIndex);
-        }
-        //todo review what needs to be returned here
-        return givenList.get(0);
+        return "The checks will be sent via " + carrier + " using " + service + ". The estimated delivery time is " + deliveryTime;
 
     }
 
