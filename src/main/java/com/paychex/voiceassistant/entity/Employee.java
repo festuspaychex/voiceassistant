@@ -1,6 +1,5 @@
-package com.efeyopixel.voiceassistant.entity;
+package com.paychex.voiceassistant.entity;
 
-import com.fasterxml.jackson.databind.ser.Serializers;
 import lombok.Data;
 
 import javax.persistence.*;
@@ -12,8 +11,6 @@ public class Employee extends BaseEntity {
     @GeneratedValue
     @Id
     private Long id;
-//    @ManyToOne(fetch = FetchType.EAGER,targetEntity = Client.class)
-//    private String clientNumber;
     private String fullName;
     private String firstName;
     private String lastName;
@@ -22,7 +19,4 @@ public class Employee extends BaseEntity {
     private Integer vacationHours;
     private Integer overtimeHours;
     private String modeOfPay;
-
-
-
 }

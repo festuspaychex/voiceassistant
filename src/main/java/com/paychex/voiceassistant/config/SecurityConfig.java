@@ -1,4 +1,4 @@
-package com.efeyopixel.voiceassistant.config;
+package com.paychex.voiceassistant.config;
 
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
@@ -21,6 +21,7 @@ public class SecurityConfig {
 
     @Bean
     public MapReactiveUserDetailsService userDetailsService() {
+        //todo replace with with LDAP or AD Authentication
         UserDetails user = User.withDefaultPasswordEncoder()
                 .username("user")
                 .password(securityPassword)
@@ -37,7 +38,7 @@ public class SecurityConfig {
                 )
                 .httpBasic(withDefaults())
         .csrf().disable();
-//                .formLogin(withDefaults()); disable form login
+//                .formLogin(withDefaults()); disable form login so that the DialogFlow webhook will only use BasicAuthentication
         return http.build();
     }
 }

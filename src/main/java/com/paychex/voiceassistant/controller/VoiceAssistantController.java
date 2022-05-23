@@ -1,13 +1,12 @@
-package com.efeyopixel.voiceassistant.controller;
+package com.paychex.voiceassistant.controller;
 
-import com.efeyopixel.voiceassistant.entity.Client;
-import com.efeyopixel.voiceassistant.entity.Employee;
-import com.efeyopixel.voiceassistant.entity.PayType;
-import com.efeyopixel.voiceassistant.entity.Payperiod;
-import com.efeyopixel.voiceassistant.repository.ClientRepository;
-import com.efeyopixel.voiceassistant.repository.EmployeeRepository;
-import com.efeyopixel.voiceassistant.repository.PayperiodRepository;
-import com.efeyopixel.voiceassistant.service.UtilService;
+import com.paychex.voiceassistant.entity.Client;
+import com.paychex.voiceassistant.entity.Employee;
+import com.paychex.voiceassistant.entity.PayType;
+import com.paychex.voiceassistant.entity.Payperiod;
+import com.paychex.voiceassistant.repository.ClientRepository;
+import com.paychex.voiceassistant.repository.EmployeeRepository;
+import com.paychex.voiceassistant.repository.PayperiodRepository;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -25,21 +24,24 @@ import javax.mail.internet.MimeBodyPart;
 import javax.mail.internet.MimeMessage;
 import javax.mail.internet.MimeMultipart;
 import javax.transaction.Transactional;
-import java.net.URISyntaxException;
 import java.util.*;
 
 @RestController
 @RequestMapping("/api")
 @AllArgsConstructor
 @Slf4j
-public class VoiceAssistantControllerV2 {
+public class VoiceAssistantController {
 
     private final ObjectMapper objectMapper;
     private final ClientRepository clientRepository;
     private final EmployeeRepository employeeRepository;
     private final PayperiodRepository payperiodRepository;
 
-
+    /**
+     * This method is used for the DialogFlow Webhook
+     * @param requestBody
+     * @return
+     */
     @PostMapping(value = "/client", produces = MediaType.APPLICATION_JSON_VALUE)
     public ResponseEntity<?> processDialogFlowRequest(@RequestBody Object requestBody) {
 
@@ -60,6 +62,11 @@ public class VoiceAssistantControllerV2 {
         return ResponseEntity.ok(response);
     }
 
+    /**
+     * Process the request from DialogFlow and return appropriate response
+     * @param request
+     * @return
+     */
     private String processRequest(JsonNode request) {
         log.info(request.toString());
 
@@ -183,83 +190,65 @@ public class VoiceAssistantControllerV2 {
             log.info("PayrollSubmitted logic.");
 
             //Getting the contact person and client number from user
+
             JsonNode parameters = queryResult.get("parameters");
+
             JsonNode payx_client = parameters.get("payx_client");
 
             //Get client details from DB
-            Optional<Client> clientById = clientRepository.findById(payx_client.textValue());
-            try {
-                sendEmail(clientById.get().getContactEmail());
-            } catch (Exception e) {
-                log.error(e.getMessage(), e);
-            }
-            getEstimatedDeliveryTimes();
 
-            return "Okay, your payroll has been processed. Please login to Paychex Flex after 30 minutes to view your reports. Would you like to process your payroll for another client as well?";
+            Optional<Client> clientById = clientRepository.findById(payx_client.textValue());
+
+            List<Employee> employees = clientById.get().getEmployees();
+
+            return "Okay, your payroll has been processed and sent to your email. Please login to Paychex Flex after 30 minutes to view your reports. Would you like to process your payroll for another client as well?";
+
         }
         return "Sorry, I didn't get that, please repeat.";
 
     }
 
-    @Transactional
-    @PostMapping(value = "/add-client", produces = MediaType.APPLICATION_JSON_VALUE)
-    public ResponseEntity<?> addClient(@RequestBody Client client) {
-        log.info("adding client {}", client);
+    private void sendEmail(String recipientEmail, String messageSubject, String messageBody) throws Exception {
 
-        Client save = clientRepository.save(client);
-        if (!client.getEmployees().isEmpty()) {
-            save.setEmployees(client.getEmployees());
-            employeeRepository.saveAll(save.getEmployees());
+        try {
+            String emailPassword ="";//todo add values here
+            String emailUsername = "";//todo add values here
+
+            //todo externalize all these values
+            Properties prop = new Properties();
+
+            prop.put("mail.smtp.auth", true);
+
+            prop.put("mail.smtp.starttls.enable", "true");
+
+            prop.put("mail.smtp.host", "smtp.gmail.com");
+            prop.put("mail.smtp.port", "587");
+
+            prop.put("mail.smtp.ssl.trust", "smtp.gmail.com");
+            Session session = Session.getInstance(prop, new Authenticator() {
+                @Override
+                protected PasswordAuthentication getPasswordAuthentication() {
+                    return new PasswordAuthentication(emailUsername, emailPassword);
+                }
+            });
+
+            Message message = new MimeMessage(session);
+            message.setFrom(new InternetAddress(emailUsername));
+
+            message.setRecipients(
+                    Message.RecipientType.TO, InternetAddress.parse(emailUsername));
+            message.setSubject(messageSubject);
+            String msg = messageBody;
+            MimeBodyPart mimeBodyPart = new MimeBodyPart();
+            mimeBodyPart.setContent(msg, "text/html; charset=utf-8");
+            Multipart multipart = new MimeMultipart();
+            multipart.addBodyPart(mimeBodyPart);
+            message.setContent(multipart);
+
+            Transport.send(message);
+        } catch (Exception ex) {
+            log.error(ex.getMessage(), ex);
         }
-
-        if (!client.getPayperiods().isEmpty()) {
-            save.setPayperiods(client.getPayperiods());
-            payperiodRepository.saveAll(save.getPayperiods());
-        }
-        return ResponseEntity.ok(save);
-    }
-
-    private final UtilService utilService;
-    private void sendEmail(String recipientEmail) throws Exception {
-
-        String emailUsername = utilService.getEmailUsername();
-        String emailPassword = utilService.getEmailPassword();
-
-        Properties prop = new Properties();
-
-        prop.put("mail.smtp.auth", true);
-
-        prop.put("mail.smtp.starttls.enable", "true");
-
-        prop.put("mail.smtp.host", "smtp.mailtrap.io");
-        prop.put("mail.smtp.port", "25");
-
-        prop.put("mail.smtp.ssl.trust", "smtp.mailtrap.io");
-        Session session = Session.getInstance(prop, new Authenticator() {
-            @Override
-            protected PasswordAuthentication getPasswordAuthentication() {
-                return new PasswordAuthentication(emailUsername, emailPassword);
-            }
-        });
-
-        Message message = new MimeMessage(session);
-        message.setFrom(new InternetAddress(emailUsername));
-        message.setRecipients(
-        Message.RecipientType.TO, InternetAddress.parse(emailUsername));
-        message.setSubject("Thank you for choosing Paychex!");
-        String msg = "<h3> We hope our virtual assistant was helpful! Please take a survey to rate your experience at www.survey.com/paychex</h3>\n" +
-                "<h5> Please do not reply to this email. This mailbox is not monitored</h5>";
-        MimeBodyPart mimeBodyPart = new MimeBodyPart();
-        mimeBodyPart.setContent(msg, "text/html; charset=utf-8");
-
-        Multipart multipart = new MimeMultipart();
-
-        multipart.addBodyPart(mimeBodyPart);
-
-        message.setContent(multipart);
-
-        Transport.send(message);
-
     }
 
     private String getEstimatedDeliveryTimes() {
@@ -281,6 +270,7 @@ public class VoiceAssistantControllerV2 {
 
     }
 
+    // These are utility methods for looking at data
     @GetMapping("/clients")
     public ResponseEntity<?> getClients() {
         return ResponseEntity.ok(clientRepository.findAll());
@@ -293,5 +283,28 @@ public class VoiceAssistantControllerV2 {
     @GetMapping("/payperiods")
     public ResponseEntity<?> getPayperiods() {
         return ResponseEntity.ok(payperiodRepository.findAll());
+    }
+
+    /**
+     * Utility method for adding a client for testing
+     * @param client
+     * @return
+     */
+    @Transactional
+    @PostMapping(value = "/add-client", produces = MediaType.APPLICATION_JSON_VALUE)
+    public ResponseEntity<?> addClient(@RequestBody Client client) {
+        log.info("adding client {}", client);
+
+        Client save = clientRepository.save(client);
+        if (!client.getEmployees().isEmpty()) {
+            save.setEmployees(client.getEmployees());
+            employeeRepository.saveAll(save.getEmployees());
+        }
+
+        if (!client.getPayperiods().isEmpty()) {
+            save.setPayperiods(client.getPayperiods());
+            payperiodRepository.saveAll(save.getPayperiods());
+        }
+        return ResponseEntity.ok(save);
     }
 }

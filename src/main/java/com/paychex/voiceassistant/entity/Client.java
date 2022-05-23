@@ -1,4 +1,4 @@
-package com.efeyopixel.voiceassistant.entity;
+package com.paychex.voiceassistant.entity;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
 import lombok.Data;

@@ -8,9 +8,14 @@
 		<version>2.6.7</version>
 		<relativePath/> <!-- lookup parent from repository -->
 	</parent>
-	<groupId>com.efeyopixel</groupId>
+	<developers>
+		<developer></developer>
+		<developer></developer>
+		<developer></developer>
+	</developers>
+	<groupId>com.paychex</groupId>
 	<artifactId>voiceassistant</artifactId>
-	<version>0.0.1-SNAPSHOT</version>
+	<version>1.0.0</version>
 	<name>voiceassistant</name>
 	<description>Payroll Voice Assistant</description>
 	<properties>
@@ -81,6 +86,7 @@
 	</dependencies>
 
 	<build>
+		<finalName>voiceassistant</finalName>
 		<plugins>
 			<plugin>
 				<groupId>org.springframework.boot</groupId>

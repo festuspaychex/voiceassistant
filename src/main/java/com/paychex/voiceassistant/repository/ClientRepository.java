@@ -1,6 +1,6 @@
-package com.efeyopixel.voiceassistant.repository;
+package com.paychex.voiceassistant.repository;
 
-import com.efeyopixel.voiceassistant.entity.Client;
+import com.paychex.voiceassistant.entity.Client;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 
